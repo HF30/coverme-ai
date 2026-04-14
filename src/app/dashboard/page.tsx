@@ -2,6 +2,7 @@
 
 import { useDashboardStats } from "@/hooks/use-dashboard-stats";
 import { useEvents } from "@/hooks/use-events";
+import { useTimesheet } from "@/hooks/use-timesheet";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { CardSkeleton } from "@/components/ui/skeleton";
@@ -20,6 +21,7 @@ const EVENT_ICONS: Record<string, string> = {
 export default function DashboardPage() {
   const { stats, loading } = useDashboardStats();
   const { upcomingEvents } = useEvents();
+  const { clockedInCount, todayLaborCost, weekToDateHours, scheduledWeekHours } = useTimesheet();
   const router = useRouter();
 
   if (loading || !stats) {
@@ -163,6 +165,35 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Time & Labor card */}
+      <Card onClick={() => router.push("/dashboard/timesheet")} className="hover:border-blue-200">
+        <CardContent>
+          <div className="flex items-center gap-2 mb-3">
+            <svg className="h-5 w-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <h2 className="text-sm font-semibold text-gray-900">Time & Labor</h2>
+          </div>
+          <div className="grid grid-cols-3 gap-4">
+            <div>
+              <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Clocked In</p>
+              <p className="mt-1 text-2xl font-bold text-gray-900">{clockedInCount}</p>
+              <p className="text-xs text-gray-500">employees</p>
+            </div>
+            <div>
+              <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Today Labor</p>
+              <p className="mt-1 text-2xl font-bold text-gray-900">${todayLaborCost.toLocaleString()}</p>
+              <p className="text-xs text-gray-500">cost so far</p>
+            </div>
+            <div>
+              <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Week Hours</p>
+              <p className="mt-1 text-2xl font-bold text-gray-900">{weekToDateHours}</p>
+              <p className="text-xs text-gray-500">vs {scheduledWeekHours} sched</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Location cards */}
       <div>
