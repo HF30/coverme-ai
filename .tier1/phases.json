@@ -1,0 +1,126 @@
+{
+  "phases": [
+    {
+      "name": "foundation",
+      "title": "Project scaffold + data model + auth",
+      "status": "pending",
+      "depends": [],
+      "effort": "large",
+      "description": "Initialize Next.js app with App Router, TypeScript, Tailwind, PWA config. Set up Supabase project with core schema: organizations, locations, employees, roles, shifts, schedules, certifications, availability. Implement Supabase Auth with role-based access (owner/manager/employee). Seed data for Wingporium (6 locations, sample employees, roles). Write RLS policies for multi-tenant isolation.",
+      "gates": ["lint", "typecheck", "build"],
+      "files": [
+        "package.json",
+        "next.config.ts",
+        "tailwind.config.ts",
+        "supabase/migrations/*.sql",
+        "src/lib/**",
+        "src/app/layout.tsx",
+        "src/app/page.tsx",
+        "src/types/**"
+      ]
+    },
+    {
+      "name": "dashboard",
+      "title": "Mobile-first scheduling dashboard",
+      "status": "pending",
+      "depends": ["foundation"],
+      "effort": "large",
+      "description": "Build the 'golf course CEO' dashboard. Mobile-first PWA with: weekly schedule grid per location, location switcher + all-locations overview, employee cards with role/availability/certs, labor cost display per shift/day/week, cross-location bench view showing available staff across all locations, drag-drop shift assignment, role-based views (owner sees all, manager sees their location). Use Supabase Realtime for live updates.",
+      "gates": ["lint", "typecheck", "build"],
+      "files": [
+        "src/app/dashboard/**",
+        "src/components/**",
+        "src/hooks/**"
+      ]
+    },
+    {
+      "name": "twilio-sms",
+      "title": "Twilio SMS integration + webhook handlers",
+      "status": "pending",
+      "depends": ["foundation"],
+      "effort": "medium",
+      "description": "Set up Twilio integration: provision phone number, build Supabase Edge Function webhook handler for incoming SMS, implement outbound SMS sending, build conversation state machine (track ongoing interactions per phone number). Handle: employee call-out messages, YES/NO replies to shift offers, owner command parsing (TODAY, DETAIL, APPROVE, etc.), natural language fallback via Claude API. Store all SMS conversations in database for audit trail.",
+      "gates": ["lint", "typecheck", "build"],
+      "files": [
+        "supabase/functions/sms-webhook/**",
+        "supabase/functions/send-sms/**",
+        "src/lib/sms/**",
+        "supabase/migrations/*sms*.sql"
+      ]
+    },
+    {
+      "name": "auto-fill",
+      "title": "Auto-fill call-out engine (THE MOAT)",
+      "status": "pending",
+      "depends": ["foundation", "twilio-sms"],
+      "effort": "large",
+      "description": "Build the core scheduling intelligence engine. When a call-out is detected: (1) Parse intent + identify the shift being dropped. (2) Query ALL locations for eligible replacements ranked by: availability, role qualification, cert status, OT risk (won't push past 44hr/week), proximity to location, historical reliability score. (3) Text top 3 candidates simultaneously. (4) First YES wins — confirm both parties, update schedule, notify manager. (5) If no response in 10 min, text next batch. (6) If all exhausted, escalate to manager then owner. Build as Supabase Edge Function + cron for timeout handling. Include replacement ranking algorithm, OT calculator, and reliability scoring.",
+      "gates": ["lint", "typecheck", "build"],
+      "files": [
+        "supabase/functions/auto-fill/**",
+        "supabase/functions/callout-timeout/**",
+        "src/lib/scheduling/**",
+        "supabase/migrations/*callout*.sql"
+      ]
+    },
+    {
+      "name": "events",
+      "title": "Event-aware staffing engine",
+      "status": "pending",
+      "depends": ["foundation", "dashboard"],
+      "effort": "medium",
+      "description": "Build event calendar integration for sports bars. Pull NHL/NBA/NFL/MLB/UFC schedules via public APIs or web scraping. Map events to locations (e.g., Leafs game affects all GTA locations). Calculate expected demand multiplier per event type (playoff = 1.8x, regular season = 1.3x, UFC PPV = 1.5x). Auto-generate staffing suggestions 2-4 weeks ahead. Show on dashboard as 'upcoming events' cards with suggested vs current headcount. Allow owner/manager to approve/adjust. Store historical event-vs-actual data for ML learning over time.",
+      "gates": ["lint", "typecheck", "build"],
+      "files": [
+        "supabase/functions/event-sync/**",
+        "src/lib/events/**",
+        "src/app/dashboard/events/**",
+        "supabase/migrations/*event*.sql"
+      ]
+    },
+    {
+      "name": "briefing",
+      "title": "Daily owner SMS briefing + natural language",
+      "status": "pending",
+      "depends": ["foundation", "twilio-sms", "auto-fill"],
+      "effort": "medium",
+      "description": "Build the automated daily briefing system. Cron job at 7 AM ET: aggregate all locations' data, generate concise SMS briefing via Claude API (staffing health, open gaps, labor %, call-outs handled overnight, upcoming events). 10 PM end-of-day summary. Support natural language replies — owner texts 'how did Hamilton do last week?' and AI queries data + responds. Implement owner SMS command system: TODAY, YESTERDAY, DETAIL [1-6], LABOR, SCHEDULE, APPROVE, DENY, HELP. Store all briefing history.",
+      "gates": ["lint", "typecheck", "build"],
+      "files": [
+        "supabase/functions/daily-briefing/**",
+        "supabase/functions/owner-chat/**",
+        "src/lib/briefing/**",
+        "supabase/migrations/*briefing*.sql"
+      ]
+    },
+    {
+      "name": "compliance",
+      "title": "ESA compliance guardrails + cert tracking",
+      "status": "pending",
+      "depends": ["foundation", "dashboard"],
+      "effort": "medium",
+      "description": "Build compliance engine for Ontario ESA: validate schedules before publish (30-min break after 5 hrs, OT threshold at 44 hrs/week, 3-hour minimum rule). Block publishing non-compliant schedules with specific violation details. Track employee certifications (Smart Serve, food handler, WHMIS, first aid) with expiry dates. Prevent scheduling uncertified staff in restricted roles. Alert 30 days before cert expiry. Compliance audit log for all schedule changes. Dashboard compliance score per location.",
+      "gates": ["lint", "typecheck", "build"],
+      "files": [
+        "src/lib/compliance/**",
+        "src/app/dashboard/compliance/**",
+        "supabase/migrations/*compliance*.sql"
+      ]
+    },
+    {
+      "name": "alerts",
+      "title": "Smart alert engine + escalation chain",
+      "status": "pending",
+      "depends": ["foundation", "twilio-sms", "auto-fill", "compliance"],
+      "effort": "small",
+      "description": "Build alert system that ties everything together. Alert types: coverage gap (no replacement found), no-show (employee didn't clock in within 15 min of shift start), labor cost trending over threshold, cert expiring in 30 days, schedule published late. Escalation chain: AI auto-resolves first → manager notification → owner notification. Alert preferences per user (SMS, push, dashboard). Alert history + analytics (most common alert types, resolution time).",
+      "gates": ["lint", "typecheck", "build"],
+      "files": [
+        "supabase/functions/alert-engine/**",
+        "src/lib/alerts/**",
+        "src/app/dashboard/alerts/**",
+        "supabase/migrations/*alert*.sql"
+      ]
+    }
+  ]
+}
