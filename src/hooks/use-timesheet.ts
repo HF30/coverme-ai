@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useCallback, useState } from "react";
+import { useMemo, useCallback, useState, useEffect } from "react";
 import { MOCK_EMPLOYEES, MOCK_LOCATIONS, MOCK_SHIFTS } from "@/lib/mock-data";
 import { calculateWeeklyPay, calculatePayPeriod } from "@/lib/payroll/overtime";
 import { generatePayrollCSV, downloadCSV } from "@/lib/payroll/export";
@@ -32,6 +32,15 @@ function addDays(d: Date, n: number): Date {
   return r;
 }
 
+// --- Seeded pseudo-random for deterministic mock data (avoids hydration mismatch) ---
+function seededRandom(seed: string): number {
+  let hash = 0;
+  for (let i = 0; i < seed.length; i++) {
+    hash = ((hash << 5) - hash + seed.charCodeAt(i)) | 0;
+  }
+  return ((hash & 0x7fffffff) % 10000) / 10000;
+}
+
 // --- Generate realistic mock time entries from shifts ---
 function generateMockTimeEntries(): TimeEntry[] {
   const entries: TimeEntry[] = [];
@@ -53,38 +62,37 @@ function generateMockTimeEntries(): TimeEntry[] {
 
     if (isFuture) continue;
 
-    // Slight variance: clock in 0-10 min early/late
-    const variance = (Math.random() - 0.3) * 10; // slight bias toward early
+    // Deterministic variance per shift
+    const r1 = seededRandom(shift.id + "clock_in");
+    const r2 = seededRandom(shift.id + "clock_out");
+    const r3 = seededRandom(shift.id + "break");
+
+    const variance = (r1 - 0.3) * 10;
     const clockIn = new Date(shiftStart.getTime() + variance * 60 * 1000);
 
     let clockOut: Date | null = null;
     let status: string = "active";
 
     if (isPast) {
-      // Past shifts are completed
-      const endVariance = (Math.random() - 0.5) * 15;
+      const endVariance = (r2 - 0.5) * 15;
       clockOut = new Date(shiftEnd.getTime() + endVariance * 60 * 1000);
       status = "completed";
     } else if (isToday) {
-      // Today: some clocked in, some completed
       if (shiftStart.getUTCHours() <= currentHour + 5) {
-        // This shift has started
         if (shiftEnd.getTime() < now.getTime()) {
-          // Shift ended
-          const endVariance = (Math.random() - 0.5) * 10;
+          const endVariance = (r2 - 0.5) * 10;
           clockOut = new Date(shiftEnd.getTime() + endVariance * 60 * 1000);
           status = "completed";
         } else {
-          // Still on shift — clocked in
           clockOut = null;
           status = "active";
         }
       } else {
-        continue; // Shift hasn't started yet
+        continue;
       }
     }
 
-    const breakMinutes = clockOut ? (Math.random() > 0.6 ? 30 : 0) : 0;
+    const breakMinutes = clockOut ? (r3 > 0.6 ? 30 : 0) : 0;
     const hoursWorked =
       clockOut
         ? (clockOut.getTime() - clockIn.getTime()) / (1000 * 60 * 60) -
@@ -189,8 +197,9 @@ function generateMockPayPeriods(): PayPeriod[] {
 // --- Generate mock pay stubs for finalized period ---
 function generateMockPayStubs(periodId: string): PayStub[] {
   return MOCK_EMPLOYEES.map((emp) => {
-    const baseHours = 70 + Math.random() * 20; // 70-90 hours in a 2-week period
-    const hasOT = Math.random() > 0.7;
+    const r = seededRandom(periodId + emp.id);
+    const baseHours = 70 + r * 20; // 70-90 hours in a 2-week period
+    const hasOT = seededRandom(periodId + emp.id + "ot") > 0.7;
     const regularHours = hasOT ? 88 : Math.round(baseHours * 10) / 10;
     const overtimeHours = hasOT ? Math.round((baseHours - 88 + 8) * 10) / 10 : 0;
 
@@ -281,9 +290,12 @@ function getPayStubs(periodId: string): PayStub[] {
 
 export function useTimesheet(options: TimesheetOptions = {}) {
   const [, setRefreshKey] = useState(0);
+  const [mounted, setMounted] = useState(false);
 
-  const allEntries = useMemo(() => getEntries(), []);
-  const payPeriods = useMemo(() => getPayPeriods(), []);
+  useEffect(() => { setMounted(true); }, []);
+
+  const allEntries = useMemo(() => mounted ? getEntries() : [], [mounted]);
+  const payPeriods = useMemo(() => mounted ? getPayPeriods() : [], [mounted]);
 
   const currentPayPeriod = useMemo(
     () => payPeriods.find((p) => p.status === "open") ?? null,

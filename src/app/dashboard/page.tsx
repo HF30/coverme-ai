@@ -183,7 +183,7 @@ export default function DashboardPage() {
             </div>
             <div>
               <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Today Labor</p>
-              <p className="mt-1 text-2xl font-bold text-gray-900">${todayLaborCost.toLocaleString()}</p>
+              <p className="mt-1 text-2xl font-bold text-gray-900">${todayLaborCost.toFixed(2)}</p>
               <p className="text-xs text-gray-500">cost so far</p>
             </div>
             <div>
